@@ -1,0 +1,293 @@
+---
+title: "R Notebook"
+output:
+  html_document:
+    df_print: paged
+---
+
+Demonstrating Stock Price Prediction methods to identify the trade across tech firms - Intel, Nvidia, AMD. The data is caputed across 3 years starting from March 2019 to March 2022. The data is extracted from Yahoo Finance.
+
+Columns extracted from Yahoo Finance:
+
+1."Date" : Trading date of a stock
+2."Open" : Opening price of a stock as per the day
+3."High" : High is a stock's highest trading price of the day
+4."Low" : Low is a stock's lowest trading price of the day
+5."Close" : Closing price of a stock
+6."Adj.Close" : The closing price after adjustments for all applicable splits and dividend distributions.
+7."Volume" : Volume measures the number of a stock’s shares that are traded on a stock exchange in a day or a period of time
+
+The data is captured at day level for all the tech firms
+
+####Installing required packages
+```{r}
+library(prophet)
+library(quantmod)
+library(forecast)
+library(tseries)
+library(timeSeries)
+library(dplyr)
+library(fGarch)
+library(xts)
+```
+
+```{r}
+nvidia <- getSymbols("NVDA", src="yahoo", from="2019-03-09", to = "2021-03-09",auto.assign = FALSE)
+amd <- getSymbols("AMD", src="yahoo", from="2019-03-09", to = "2021-03-09",auto.assign = FALSE)
+intel <- getSymbols("INTC", src="yahoo", from="2019-03-09", to = "2021-03-09",auto.assign = FALSE)
+
+indf_data1 <- Cl(nvidia)
+indf_data2 <- Cl(amd)
+indf_data3 <- Cl(intel)
+
+```
+
+Nvidia stock market plot
+
+```{r}
+chart_Series(indf_data1, col = "black")
+add_SMA(n = 100, on = 1, col = "red")
+add_SMA(n = 20, on = 1, col = "black")
+add_RSI(n = 14, maType = "SMA")
+add_BBands(n = 20, maType = "SMA", sd = 1, on = -1)
+add_MACD(fast = 12, slow = 25, signal = 9, maType = "SMA", histogram = TRUE)
+```
+
+AMD stock market plot
+
+```{r}
+chart_Series(indf_data2, col = "black")
+add_SMA(n = 100, on = 1, col = "red")
+add_SMA(n = 20, on = 1, col = "black")
+add_RSI(n = 14, maType = "SMA")
+add_BBands(n = 20, maType = "SMA", sd = 1, on = -1)
+add_MACD(fast = 12, slow = 25, signal = 9, maType = "SMA", histogram = TRUE)
+```
+
+Intel stock market plot
+
+```{r}
+chart_Series(indf_data3, col = "black")
+add_SMA(n = 100, on = 1, col = "red")
+add_SMA(n = 20, on = 1, col = "black")
+add_RSI(n = 14, maType = "SMA")
+add_BBands(n = 20, maType = "SMA", sd = 1, on = -1)
+add_MACD(fast = 12, slow = 25, signal = 9, maType = "SMA", histogram = TRUE)
+```
+
+```{r}
+indf_log1 <- log(indf_data1)
+indf_log2 <- log(indf_data2)
+indf_log3 <- log(indf_data3)
+head(indf_log1, n = 2)
+tail(indf_log1, n = 2)
+head(indf_log2, n = 2)
+tail(indf_log2, n = 2)
+head(indf_log3, n = 2)
+tail(indf_log3, n = 2)
+```
+
+```{r}
+plot(indf_log1, main = "log Nvidia chart")
+plot(indf_log2, main = "log AMD chart")
+plot(indf_log3, main = "log Intel chart")
+```
+
+```{r}
+acf_log1 <- acf(indf_log1, lag.max = 320)
+acf_log2 <- acf(indf_log2, lag.max = 320)
+acf_log3 <- acf(indf_log3, lag.max = 320)
+pacf_log1 <- pacf(indf_log1, lag.max = 320)
+pacf_log2 <- pacf(indf_log2, lag.max = 320)
+pacf_log3 <- pacf(indf_log3, lag.max = 320)
+```
+
+```{r}
+indf_diff1 <- diff(indf_log1, lag = 1)
+indf_diff1 <- na.locf(indf_diff1, na.rm = TRUE,fromLast = TRUE)
+indf_diff2 <- diff(indf_log2, lag = 1)
+indf_diff2 <- na.locf(indf_diff2, na.rm = TRUE,fromLast = TRUE)
+indf_diff3 <- diff(indf_log3, lag = 1)
+indf_diff3 <- na.locf(indf_diff3, na.rm = TRUE,fromLast = TRUE)
+plot(indf_diff1)
+plot(indf_diff2)
+plot(indf_diff3)
+```
+
+As the log data is not stationary, we should difference at certain lag for it to be stationary.
+
+Augmented Dickey Fuller Test
+
+```{r}
+adf1 <- adf.test(indf_log1, alternative = c("stationary", "explosive"), k = 0)
+adf2 <- adf.test(indf_log2, alternative = c("stationary", "explosive"), k = 0)
+adf3 <- adf.test(indf_log3, alternative = c("stationary", "explosive"), k = 0)
+adf1
+adf2
+adf3
+```
+
+```{r}
+library(caTools)
+train_data1 <- indf_diff1[1:365]
+train_data2 <- indf_diff2[1:365]
+train_data3 <- indf_diff3[1:365]
+
+library(forecast)
+set.seed(123)
+arima_model1 <- auto.arima(train_data1, stationary = TRUE, ic = c("aicc", "aic", "bic"), 
+                          trace = TRUE)
+arima_model2 <- auto.arima(train_data2, stationary = TRUE, ic = c("aicc", "aic", "bic"), 
+                          trace = TRUE)
+arima_model3 <- auto.arima(train_data3, stationary = TRUE, ic = c("aicc", "aic", "bic"), 
+                          trace = TRUE)
+
+summary(arima_model1)
+summary(arima_model2)
+summary(arima_model3)
+checkresiduals(arima_model1) #diagnostic checking
+checkresiduals(arima_model2) #diagnostic checking
+checkresiduals(arima_model3) #diagnostic checking
+```
+
+```{r}
+arima1 <- arima(train_data1, order = c(0, 0, 2))
+arima2 <- arima(train_data2, order = c(2, 0, 0))
+arima3 <- arima(train_data3, order = c(1, 0, 3))
+summary(arima1)
+summary(arima2)
+summary(arima3)
+
+forecast1 <- forecast(arima1, h = 100)
+forecast2 <- forecast(arima2, h = 100)
+forecast3 <- forecast(arima3, h = 100)
+plot(forecast1)
+plot(forecast2)
+plot(forecast3)
+```
+
+
+```{r}
+forecast_ori1 <- forecast(arima1, h = 200)
+a <- ts(indf_log1)
+forecast_ori1 %>% autoplot() + autolayer(a)
+
+forecast_ori2 <- forecast(arima2, h = 100)
+a <- ts(indf_log2)
+forecast_ori2 %>% autoplot() + autolayer(a)
+
+forecast_ori3 <- forecast(arima3, h = 100)
+a <- ts(indf_log3)
+forecast_ori3 %>% autoplot() + autolayer(a)
+
+```
+
+
+##Implementing STL Approach for Stock Price Forecasting
+
+```{r}
+nvidia <- getSymbols("NVDA", src="yahoo", from="2019-03-09", to = "2021-03-09",auto.assign = FALSE)
+amd <- getSymbols("AMD", src="yahoo", from="2019-03-09", to = "2021-03-09",auto.assign = FALSE)
+intel <- getSymbols("INTC", src="yahoo", from="2019-03-09", to = "2021-03-09",auto.assign = FALSE)
+
+indf_data1 <- Cl(nvidia)
+indf_data2 <- Cl(amd)
+indf_data3 <- Cl(intel)
+```
+
+```{r}
+freq <- 7
+adj <- ts(indf_data1, frequency = freq)
+
+whole.periods <- floor(nrow(adj) / freq)
+partial.periods <- nrow(adj) %% freq
+
+desired.test <- 3
+training.end.row <- whole.periods + 1
+training.end.col <- ifelse(partial.periods == 0, freq - desired.test, freq - partial.periods - desired.test)
+if(partial.periods < desired.test){
+  training.end.row <- whole.periods
+  training.end.col <- freq - (desired.test - partial.periods)
+}
+training.ts <- window(adj, c(1,1), c(training.end.row,training.end.col))
+testing.ts <- window(adj, c(training.end.row, training.end.col + 1))
+
+fit.stl <- stl(training.ts[,1], s.window = "period")
+
+plot(fit.stl, main="STL Decomposition")
+
+
+forecasted.adj <- stlf(training.ts[,1], s.window = "period", method="arima", h=desired.test)
+plot(forecasted.adj, main="Forecasts of NWN from STL and ARIMA (w/o weekly data)")
+
+accuracy(forecasted.adj, testing.ts)
+```
+```{r, fig.width=10, fig.height=4}
+plot(forecasted.adj, main="Forecasts of NWN from STL and ARIMA (w/o month data)", xlim = c(60, 75))
+```
+
+```{r}
+freq <- 7
+adj <- ts(indf_data2, frequency = freq)
+
+whole.periods <- floor(nrow(adj) / freq)
+partial.periods <- nrow(adj) %% freq
+
+desired.test <- 3
+training.end.row <- whole.periods + 1
+training.end.col <- ifelse(partial.periods == 0, freq - desired.test, freq - partial.periods - desired.test)
+if(partial.periods < desired.test){
+  training.end.row <- whole.periods
+  training.end.col <- freq - (desired.test - partial.periods)
+}
+training.ts <- window(adj, c(1,1), c(training.end.row,training.end.col))
+testing.ts <- window(adj, c(training.end.row, training.end.col + 1))
+
+fit.stl <- stl(training.ts[,1], s.window = "period")
+
+plot(fit.stl, main="STL Decomposition")
+
+forecasted.adj <- stlf(training.ts[,1], s.window = "period", method="arima", h=desired.test)
+plot(forecasted.adj, main="Forecasts of NWN from STL and ARIMA (w/o weekly data)")
+
+accuracy(forecasted.adj, testing.ts)
+```
+```{r, fig.width=10, fig.height=4}
+plot(forecasted.adj, main="Forecasts of NWN from STL and ARIMA (w/o month data)", xlim = c(60, 75))
+```
+
+
+```{r}
+freq <- 7
+adj <- ts(indf_data3, frequency = freq)
+
+whole.periods <- floor(nrow(adj) / freq)
+partial.periods <- nrow(adj) %% freq
+
+desired.test <- 3
+training.end.row <- whole.periods + 1
+training.end.col <- ifelse(partial.periods == 0, freq - desired.test, freq - partial.periods - desired.test)
+if(partial.periods < desired.test){
+  training.end.row <- whole.periods
+  training.end.col <- freq - (desired.test - partial.periods)
+}
+training.ts <- window(adj, c(1,1), c(training.end.row,training.end.col))
+testing.ts <- window(adj, c(training.end.row, training.end.col + 1))
+
+fit.stl <- stl(training.ts[,1], s.window = "period")
+
+plot(fit.stl, main="STL Decomposition")
+forecasted.adj <- stlf(training.ts[,1], s.window = "period", method="arima", h=desired.test, lambda = 4)
+plot(forecasted.adj, main="Forecasts of NWN from STL and ARIMA (w/o weekly data)")
+
+accuracy(forecasted.adj, testing.ts)
+```
+
+
+
+
+```{r, fig.width=10, fig.height=4}
+plot(forecasted.adj, main="Forecasts of NWN from STL and ARIMA (w/o month data)", xlim = c(60, 75))
+```
+
+
